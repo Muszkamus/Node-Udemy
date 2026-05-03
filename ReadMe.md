@@ -486,6 +486,216 @@ Transfer-Encoding: chunked
 
 ---
 
-###
+# Section 4: How Node.js Works: A Look Behind the Scenes
+
+---
+
+### 30. Node, V8, Libuv and C++
+
+---
+
+Node is built on top of the V8 engine which is built by Google
+Also, it's built on libuv which does event loop (threading) and thread pool (File access)
+
+Also, other tools
+
+- http-parser
+- c-ares
+- OpenSLL
+- zlib
+
+---
+
+### 31. Processes, Threads and the Thread Pool
+
+---
+
+NODE.JS Process (Instance of a program in execution on a computer) >
+Single Thread (Sequence pf instructions) >
+
+1. Initialize the program
+2. Execute top-level code
+3. Load/require modules
+4. Register event callbacks
+5. Start the Event Loop
+
+The Event Loop handles asynchronous callbacks, such as:
+
+```js
+setTimeout();
+fs.readFile();
+server.on("request");
+```
+
+It allows Node.js to handle many operations without blocking the main thread.
+
+Some expensive tasks are offloaded to the libuv thread pool, including:
+
+- File system operations
+- Cryptography
+- Compression
+- DNS lookup
+
+---
+
+# 32. The Node.js Event Loop
+
+---
+
+All the application code that is inside callback functions (non-top-level-code)
+Node.js is built around callback functions
+
+Event driven architecture
+
+- Events are emitted
+- Event loop picks them up
+- Callbacks are called
+
+example
+
+Start:
+
+```js
+const fs = require("fs");
+
+console.log("1. Top-level code starts");
+
+setTimeout(() => {
+  console.log("5. Timers phase: setTimeout callback");
+}, 0);
+
+setImmediate(() => {
+  console.log("7. Check phase: setImmediate callback");
+});
+
+fs.readFile(__filename, "utf8", () => {
+  console.log("6. Poll phase: I/O callback from fs.readFile");
+
+  setImmediate(() => {
+    console.log("8. Check phase: setImmediate inside I/O");
+  });
+
+  setTimeout(() => {
+    console.log("9. Timers phase: setTimeout inside I/O");
+  }, 0);
+});
+
+process.nextTick(() => {
+  console.log("3. Microtask: process.nextTick");
+});
+
+Promise.resolve().then(() => {
+  console.log("4. Microtask: Promise.then");
+});
+
+console.log("2. Top-level code ends");
+```
+
+---
+
+### 33. The Event Loop in Practice
+
+---
+
+```js
+const fs = require("fs");
+const crypto = require("crypto");
+
+const start = Date.now();
+process.env.UV_THREADPOOL_SIZE = 2;
+
+setTimeout(() => console.log("Timer 1 finished"), 0);
+setImmediate(() => console.log("Immediate finished"));
+
+fs.readFile("test-file.txt", () => {
+  console.log("I/O Finished");
+});
+
+crypto.pbkdf2("password", "salt", 100000, 1024, "sha512", () => {
+  console.log(Date.now() - start, "password ");
+});
+crypto.pbkdf2("password", "salt", 100000, 1024, "sha512", () => {
+  console.log(Date.now() - start, "password ");
+});
+crypto.pbkdf2("password", "salt", 100000, 1024, "sha512", () => {
+  console.log(Date.now() - start, "password ");
+});
+crypto.pbkdf2("password", "salt", 100000, 1024, "sha512", () => {
+  console.log(Date.now() - start, "password ");
+});
+
+console.log("Hello from the top-level code");
+```
+
+1. Top-level code runs first
+2. setTimeout waits for timers phase
+3. setImmediate waits for check phase
+4. fs.readFile runs through I/O / poll phase
+5. pbkdf2 uses the libuv thread pool
+
+---
+
+### 34. Events and Event-Driven Architecture
+
+---
+
+Event Emitter → emits event → Listener → executes callback
+
+Doorbell (event) → You hear it (listener) → You open door (callback)
+
+1. Client hits: http://127.0.0.1:8000
+1. Server emits: "request" event
+1. Listener (server.on) catches it
+1. Callback executes
+1. Response is sent
+
+```js
+const http = require("http");
+
+const server = http.createServer();
+
+server.on("request", (req, res) => {
+  console.log("Request received");
+  res.end("Response sent");
+});
+
+server.listen(8000, "127.0.0.1", () => {
+  console.log("Server running on port 8000");
+});
+```
+
+Another example
+
+```js
+const EventEmitter = require("events");
+
+const myEmitter = new EventEmitter();
+
+myEmitter.on("greet", (name) => {
+  console.log(`Hello ${name}`);
+});
+
+myEmitter.emit("greet", "John");
+```
+
+Real world example
+
+```js
+const EventEmitter = require("events");
+const emitter = new EventEmitter();
+
+function createOrder(order) {
+  saveToDB(order);
+  emitter.emit("orderCreated", order);
+}
+
+// listeners
+emitter.on("orderCreated", sendEmail);
+emitter.on("orderCreated", updateDashboard);
+```
+
+---
+
+### 35. Events in Practice
 
 ---
