@@ -1012,3 +1012,99 @@ require("./test-module3")();
 # Section 6: Express: Let's Start Building the Natours API!
 
 ---
+
+### 50. Setting up Express and Basic Routing
+
+---
+
+```js
+const express = require("express");
+const app = express();
+
+app.get("/", (req, res) => {
+  res.status(200).json({ message: "Hello from the server", app: "Natours" });
+});
+
+app.post("/", (req, res) => {
+  res.send("You can post to this endpoint");
+});
+
+const port = 3000;
+app.listen(port, () => {
+  console.log(`"App running on port ${port}...`);
+});
+```
+
+---
+
+### 51. APIs and RESTful API Design
+
+---
+
+```js
+const express = require("express"); // Import Express framework (used to build APIs and servers)
+const fs = require("fs"); // Import File System module (to read/write files)
+
+const app = express(); // Create an Express application instance
+
+app.use(express.json());
+// Middleware: parses incoming request bodies with JSON payloads
+// Without this, req.body would be undefined for JSON requests
+
+const tours = JSON.parse(
+  fs.readFileSync(`${__dirname}/dev-data/data/tours-simple.json`),
+);
+// Read tours data from a JSON file synchronously
+// __dirname = current directory path
+// fs.readFileSync returns raw text → JSON.parse converts it into a JavaScript object (array of tours)
+
+app.get("/api/v1/tours", (req, res) => {
+  // Handle GET requests to fetch all tours
+
+  res.status(200).json({
+    status: `success`, // Indicates request was successful
+    results: tours.length, // Number of tours returned
+    data: {
+      tours, // Send the tours array as response
+    },
+  });
+});
+
+app.post("/api/v1/tours", (req, res) => {
+  // Handle POST requests to create a new tour
+
+  const newId = tours[tours.length - 1].id + 1;
+  // Generate a new ID by taking the last tour's ID and adding 1
+  // Assumes tours are ordered and IDs are sequential
+
+  const newTour = Object.assign({ id: newId }, req.body);
+  // Create a new tour object:
+  // - Start with { id: newId }
+  // - Merge in properties from req.body (client input)
+
+  tours.push(newTour);
+  // Add the new tour to the in-memory array
+
+  fs.writeFile(
+    `${__dirname}/dev-data/data/tours-simple.json`,
+    JSON.stringify(tours),
+    (err) => {
+      // Write updated tours array back to file (async)
+      // JSON.stringify converts JS object → JSON string
+
+      res.status(201).json({
+        status: "success",
+        data: {
+          tour: newTour, // Return the newly created tour
+        },
+      });
+    },
+  );
+});
+
+const port = 3000;
+app.listen(port, () => {
+  // Start server and listen for incoming requests on port 3000
+  console.log(`App running on port ${port}...`);
+});
+```
