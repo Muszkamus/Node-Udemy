@@ -699,3 +699,316 @@ emitter.on("orderCreated", updateDashboard);
 ### 35. Events in Practice
 
 ---
+
+```js
+// Import the built-in Node.js 'events' module
+// This module provides the EventEmitter class, which allows us to work with events
+const EventEmitter = require("events");
+
+// Create a custom class 'Sales' that extends EventEmitter
+// This means 'Sales' inherits all event-related functionality (on, emit, etc.)
+class Sales extends EventEmitter {
+  constructor() {
+    // Call the parent class (EventEmitter) constructor
+    // This is required when extending classes in JavaScript
+    super();
+  }
+}
+
+// Create an instance of the Sales class
+// This object can now emit and listen to events
+const myEmitter = new Sales();
+
+// Register an event listener for the "newSale" event
+// This listener will run whenever "newSale" is emitted
+myEmitter.on("newSale", () => {
+  console.log("There was a new sale!");
+});
+
+// Register another listener for the same "newSale" event
+// Multiple listeners can be attached to the same event
+myEmitter.on("newSale", () => {
+  console.log("Customer name: Radek");
+});
+
+// Register a third listener for "newSale"
+// This one accepts a parameter (stock), which will be passed when the event is emitted
+myEmitter.on("newSale", (stock) => {
+  console.log(`There are now ${stock} items left`);
+});
+
+// Emit the "newSale" event
+// This triggers ALL listeners registered for "newSale"
+// The value '9' is passed as an argument to the listeners that expect parameters
+myEmitter.emit("newSale", 9);
+
+// Output will be:
+// There was a new sale!
+// Customer name: Radek
+// There are now 9 items left
+```
+
+```js
+// Import the built-in Node.js 'http' module
+// This module allows us to create HTTP servers and handle requests/responses
+const http = require("http");
+
+// Create a new HTTP server instance
+// Under the hood, this server is also an EventEmitter
+const server = http.createServer();
+
+// Attach a listener to the "request" event
+// This event fires every time a client (browser, Postman, etc.) makes a request
+server.on("request", (req, res) => {
+  console.log("Request received!"); // Log to the console
+  res.end("Request received!"); // Send response back to the client and END the response
+});
+
+// Attach another listener to the SAME "request" event
+// Multiple listeners can exist, and they will run in the order they were registered
+server.on("request", (req, res) => {
+  console.log("Another request"); // This will also log for every incoming request
+
+  // ⚠️ IMPORTANT:
+  // We do NOT call res.end() here.
+  // If we tried to send another response, Node.js would throw an error:
+  // "Cannot set headers after they are sent to the client"
+});
+
+// Attach a listener to the "close" event
+// This event is emitted when the server is shut down (e.g., server.close())
+server.on("close", () => {
+  // ⚠️ NOTE:
+  // There is NO 'res' object here because this event is not tied to a specific request
+  // Calling res.end() here would cause an error — so we should NOT do that
+  console.log("Server closed");
+});
+
+// Start the server and make it listen for incoming requests
+// - 8000 is the port
+// - 127.0.0.1 means localhost (only accessible from this machine)
+server.listen(8000, "127.0.0.1", () => {
+  console.log("Waiting for requests"); // Runs once the server starts successfully
+});
+```
+
+---
+
+### 36. Introduction to Streams
+
+---
+
+Streams: Used to process (read and write) data piece by piece (chunks) e.g. YouTube or Netflix.
+
+- Perfect for handling large volumes of data
+
+in Node.JS there are 4 types:
+
+Readable: Streams from which we can read (consume) data.
+
+- http requests
+- fs read streams
+
+Important events:
+
+- data
+- end
+
+Important functions:
+
+```js
+pipe();
+read();
+```
+
+Writable: Streams from which we can write data.
+
+- http responses
+- fs write streams
+
+Important events:
+
+- drain
+- finish
+
+Important functions:
+
+```js
+write();
+end();
+```
+
+Duplex: Work in both directions
+
+- net web socket
+
+Transform:
+
+Duxples streams that transform data as it is written or read.
+
+- zlib Gzip creation
+
+---
+
+### 37. Streams in Practice
+
+---
+
+Solution 1: fs.readFile (Load everything into memory)
+
+- fs.readFile loads the entire file into RAM
+- Only after loading completes → response is sent
+
+❗ Problems
+
+- Bad for large files
+- High memory usage
+- Slower for big data (user waits longer)
+
+```js
+const fs = require("fs");
+const http = require("http");
+
+const server = http.createServer((req, res) => {
+  // Reads the entire file into memory before sending it
+  fs.readFile("test-file.txt", (err, data) => {
+    if (err) {
+      res.statusCode = 500;
+      return res.end("Error reading file");
+    }
+
+    // Send the whole file at once
+    res.end(data);
+  });
+});
+
+server.listen(8000, "127.0.0.1", () => console.log("Listening"));
+```
+
+Solution 2: Streams (Manual handling)
+
+- File is read piece by piece (chunks)
+- Each chunk is sent immediately to the client
+
+Advantages
+
+- Low memory usage
+- Faster for large files
+- Starts sending data immediately
+
+❗ Problems
+
+- More verbose
+
+```js
+const fs = require("fs");
+const http = require("http");
+
+const server = http.createServer((req, res) => {
+  // Create a readable stream
+  const readable = fs.createReadStream("test-file.txt");
+
+  // Fired when a chunk of data is ready
+  readable.on("data", (chunk) => {
+    res.write(chunk); // send chunk to client
+  });
+
+  // Fired when stream ends
+  readable.on("end", () => {
+    res.end(); // finish response
+  });
+
+  // Handle errors (e.g., file not found)
+  readable.on("error", (err) => {
+    console.error(err);
+    res.statusCode = 500;
+    res.end("File not found");
+  });
+});
+
+server.listen(8000, "127.0.0.1", () => console.log("Listening"));
+```
+
+Solution 3: Streams with .pipe() (Best practice)
+
+Automatically handles:
+
+- data flow
+- backpressure (very important!)
+- ending the response
+
+Only Solution 3 properly handles backpressure.
+
+Backpressure = when the client is slower than the data stream
+
+```js
+const fs = require("fs");
+const http = require("http");
+
+const server = http.createServer((req, res) => {
+  const readable = fs.createReadStream("test-file.txt");
+
+  // Pipe automatically handles data flow from readable → writable
+  readable.pipe(res);
+
+  // Still good practice to handle errors
+  readable.on("error", (err) => {
+    console.error(err);
+    res.statusCode = 500;
+    res.end("File not found");
+  });
+});
+
+server.listen(8000, "127.0.0.1", () => console.log("Listening"));
+```
+
+---
+
+### 38. How Requiring Modules Really Works
+
+---
+
+![alt text](image.png)
+![alt text](image-1.png)
+
+---
+
+### 39. Requiring Modules in Practice
+
+---
+
+```js
+// console.log(arguments);
+// console.log(require("module").wrapper); // '(function (exports, require, module, __filename, __dirname) { ','\n});'
+
+// module.exports
+const C = require("./test-module1");
+const calc1 = new C();
+console.log(calc1.add(2, 5));
+
+// exports
+// exports.add = (a, b) => a + b;
+const { add, multiply } = require("./test-module2");
+console.log(add(2, 10));
+
+// cache
+
+// console.log("Hello from the module");
+// module.exports = () => console.log("Log this text 😁");
+require("./test-module3")();
+require("./test-module3")();
+require("./test-module3")();
+
+// Output
+
+// Hello from the module
+// Log this text 😁
+// Log this text 😁
+// Log this text 😁
+```
+
+---
+
+# Section 6: Express: Let's Start Building the Natours API!
+
+---
