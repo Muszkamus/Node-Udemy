@@ -1108,3 +1108,130 @@ app.listen(port, () => {
   console.log(`App running on port ${port}...`);
 });
 ```
+
+---
+
+### 54. Responding to URL Parameters
+
+---
+
+```js
+// Define a GET endpoint
+// Route: /api/v1/tours/:id
+// ":id" is a dynamic route parameter
+// Example request:
+// GET /api/v1/tours/5
+app.get("/api/v1/tours/:id", (req, res) => {
+  // Extract the id from the URL parameters
+  // req.params.id is always a string
+  // Number() converts it into a number
+  //
+  // Example:
+  // req.params.id = '5'
+  // id = 5
+  const id = Number(req.params.id);
+
+  // Search inside the tours array
+  // .find() loops through each element
+  //
+  // "tour" represents the current element
+  // during each iteration
+  //
+  // It returns the FIRST object
+  // whose id matches the requested id
+
+  const tour = tours.find((tour) => tour.id === id);
+
+  // If no matching tour is found
+  // return a 404 error response
+  //
+  // !tour means:
+  // null, undefined, false, etc.
+  if (!tour) {
+    return res.status(404).json({
+      status: "fail",
+      message: "Invalid ID",
+    });
+  }
+  res.status(200).json({
+    status: "success",
+    data: {
+      tour,
+    },
+  });
+});
+```
+
+---
+
+### 55. Handling PATCH Requests
+
+---
+
+```js
+const createTour = (req, res) => {
+  const newId = tours[tours.length - 1].id + 1;
+  const newTour = Object.assign({ id: newId }, req.body);
+
+  tours.push(newTour);
+
+  fs.writeFile(
+    `${__dirname}/dev-data/data/tours-simple.json`,
+    JSON.stringify(tours),
+    (err) => {
+      res.status(201).json({
+        status: "success",
+        data: {
+          tour: newTour,
+        },
+      });
+    },
+  );
+};
+
+const updateTour = (req, res) => {
+  if (req.params.id * 1 > tours.length) {
+    return res.status(404).json({
+      status: "fails",
+      message: "Invalid ID",
+    });
+  }
+  res.status(200).json({
+    status: "success",
+    data: {
+      tour: `<updated tour here>`,
+    },
+  });
+};
+
+const deleteTour = (req, res) => {
+  if (req.params.id * 1 > tours.length) {
+    return res.status(404).json({
+      status: "fails",
+      message: "Invalid ID",
+    });
+  }
+  res.status(204).json({
+    status: "success",
+    data: null,
+  });
+};
+
+// app.get('/api/v1/tours/:id', getAllTours);
+// app.post('/api/v1/tours', createTour);
+// app.patch('/api/v1/tours/:id', getTour);
+// app.delete('/api/v1/tours/:id', deleteTour);
+
+app.route("/api/v1/tours").get(getAllTours).post(createTour);
+
+app
+  .route("/api/v1/tours/:id")
+  .get(getTour)
+  .patch(updateTour)
+  .delete(deleteTour);
+
+const port = 3000;
+app.listen(port, () => {
+  console.log(`"App running on port ${port}...`);
+});
+```
