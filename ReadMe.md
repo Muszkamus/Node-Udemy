@@ -1164,7 +1164,7 @@ app.get("/api/v1/tours/:id", (req, res) => {
 
 ---
 
-### 55. Handling PATCH Requests
+### 57. Refactoring Our Routes
 
 ---
 
@@ -1234,4 +1234,76 @@ const port = 3000;
 app.listen(port, () => {
   console.log(`"App running on port ${port}...`);
 });
+```
+
+---
+
+### 59. Creating Our Own Middleware
+
+---
+
+```js
+// Crucial, must be at the top of the code to be called first
+// 1. request, 2. response. 3. middleware
+app.use((req, res, next) => {
+  console.log("Middleware");
+  next(); // Calling middleware. Mandatory
+});
+
+app.use((req, res, next) => {
+  req.requestTime = new Date().toISOString();
+  next();
+});
+```
+
+---
+
+### 62. Creating and Mounting Multiple Routers
+
+---
+
+```js
+const tourRouter = express.Router();
+const userRouter = express.Router();
+
+app.use("/api/v1/tours", tourRouter);
+app.use("/api/v1/users", userRouter);
+
+tourRouter.route("/").get(getAllTours).post(createTour);
+tourRouter.route("/:id").get(getTour).patch(updateTour).delete(deleteTour);
+
+userRouter.route("/").get(getAllUsers).post(createUser);
+userRouter.route("/:id").get(getUser).patch(updateUser).delete(deleteUser);
+```
+
+---
+
+### 64. Param Middleware
+
+---
+
+```js
+// Middleware function that runs whenever an 'id' parameter exists in the route
+exports.checkID = (req, res, next, val) => {
+  // req.params.id comes from the URL and is a string
+  // '* 1' converts it into a number
+  // Check if the ID is greater than the number of tours available
+  if (req.params.id * 1 > tours.length) {
+    // If invalid, send a 404 response and stop execution
+    return res.status(404).json({
+      status: "fails",
+      message: "Invalid ID",
+    });
+  }
+
+  // If the ID is valid, move to the next middleware/controller
+  next();
+};
+```
+
+```js
+// Register param middleware for any route containing ':id'
+// Example: GET /tours/5
+// Express automatically calls checkID before the route handler
+router.param("id", tourController.checkID);
 ```
