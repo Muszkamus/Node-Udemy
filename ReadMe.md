@@ -1307,3 +1307,319 @@ exports.checkID = (req, res, next, val) => {
 // Express automatically calls checkID before the route handler
 router.param("id", tourController.checkID);
 ```
+
+---
+
+# Section 7: Introduction to MongoDB
+
+---
+
+### 74. [OPTIONAL] Creating a Local Database
+
+---
+
+Switch between databases
+
+```bash
+use # db-name
+```
+
+- Create a record
+
+```bash
+db.tours.insertOne({name:"The Forest Hiker", price: 297, rating:4.7})
+{
+  acknowledged: true,
+  insertedId: ObjectId('69fd116f16fce36ff2abc114')
+}
+```
+
+```bash
+db.tours.insertOne({name:"The Forest Hiker", price: 297, rating:4.7})
+{
+  acknowledged: true,
+  insertedId: ObjectId('69fd116f16fce36ff2abc114')
+}
+
+```
+
+show record
+
+```bash
+
+db.tours.find()
+[
+  {
+    _id: ObjectId('69fd116f16fce36ff2abc114'),
+    name: 'The Forest Hiker',
+    price: 297,
+    rating: 4.7
+  }
+]
+
+```
+
+show all databases
+
+```bash
+show dbs
+```
+
+show existing collections within the database
+
+```bash
+show collections
+```
+
+---
+
+# 75. [OPTIONAL] CRUD: Creating Documents
+
+---
+
+```bash
+db.tours.insertMany([{ name: "The Sea Explorer", price: 497, raing: 4.8}, {name:"The Snow Adventurer", price:997, rating: 4.9, difficulty: "easy"}])
+
+```
+
+---
+
+# 76. [OPTIONAL] CRUD: Querying (Reading) Documents
+
+---
+
+```bash
+db.tours.find({name: "The Forest Hiker"})
+```
+
+```bash
+db.tours.find({difficulty: "easy"})
+
+```
+
+"$" refers to special operator e.g. lte - less than, gte - greater than
+
+```bash
+db.tours.find({ price : {$lte: 500}, rating: {$gte: 4} })
+```
+
+OR operator
+
+```bash
+db.tours.find({ $or :[ {price : {$lte: 500}}, {rating : {$gte : 4}} ]})
+```
+
+or operator and showing less stuff e.g.
+
+```bash
+db.tours.find({ $or : [ { price : {$lte : 500}}, {rating : {gte : 4}} ]}, {name:1})
+```
+
+---
+
+# 77. [OPTIONAL] CRUD: Updating Documents
+
+---
+
+```bash
+db.tours.updateOne({name: "The Snow Adventurer"}, {$set : {price : 597} })
+{
+  acknowledged: true,
+  insertedId: null,
+  matchedCount: 1,
+  modifiedCount: 1,
+  upsertedCount: 0
+}
+```
+
+---
+
+# 78. [OPTIONAL] CRUD: Deleting Documents
+
+---
+
+```bash
+db.tours.deleteMany({ rating : {$lt : 4.8}})
+{ acknowledged: true, deletedCount: 1 }
+natours-test>
+```
+
+---
+
+# Section 8: Using MongoDB with Mongoose
+
+---
+
+### 85. Creating a Simple Tour Model
+
+---
+
+```js
+// Import Mongoose, an ODM (Object Data Modeling) library for MongoDB.
+// Mongoose makes it easier to define schemas, validate data,
+// and interact with MongoDB using JavaScript objects.
+const mongoose = require("mongoose");
+
+// Import dotenv to load environment variables from config.env
+const dotenv = require("dotenv");
+
+// Load variables like DATABASE, DATABASE_PASSWORD, PORT into process.env
+dotenv.config({ path: "./config.env" });
+
+// Import the Express application
+const app = require("./app");
+
+// process.env.DATABASE likely contains a MongoDB connection string like:
+// mongodb+srv://username:<PASSWORD>@cluster.mongodb.net/tours
+//
+// Replace the placeholder <PASSWORD> with the actual password
+// from the environment variable DATABASE_PASSWORD.
+const DB = process.env.DATABASE.replace(
+  "<PASSWORD>",
+  process.env.DATABASE_PASSWORD,
+);
+
+// Connect Mongoose to MongoDB
+//
+// mongoose.connect():
+// - Establishes a connection between your Node.js app and MongoDB
+// - Returns a Promise
+//
+// DB = MongoDB connection URI
+mongoose
+  .connect(DB, {
+    // These options were needed in older Mongoose versions
+    // but are deprecated/ignored in modern versions.
+    // useNewUrlParser: true,
+    // Uses the new MongoDB connection string parser
+    // useCreateIndex: true,
+    // Uses createIndex() instead of deprecated ensureIndex()
+    // useFindAndModify: true,
+    // Controls whether findOneAndUpdate() uses native MongoDB methods
+  })
+
+  // Runs if connection succeeds
+  .then(() => {
+    console.log("Connected to the DB!");
+  });
+
+// Define a Mongoose Schema
+//
+// A Schema describes the structure of documents inside a MongoDB collection.
+//
+// MongoDB itself is schema-less, meaning it allows flexible document structure.
+// Mongoose adds schema enforcement and validation on top of MongoDB.
+const tourSchema = new mongoose.Schema({
+  // Field: name
+  name: {
+    type: String, // Must be a string
+
+    // Validation: this field is required
+    // If missing, Mongoose throws:
+    // "A tour must have a name"
+    required: [true, "A tour must have a name"],
+
+    // Ensures MongoDB creates a unique index for this field
+    // Prevents duplicate tour names
+    unique: true,
+  },
+
+  // Field: rating
+  rating: {
+    type: Number, // Must be a number
+
+    // If no rating is provided, default to 4.5
+    default: 4.5,
+  },
+
+  // Field: price
+  price: {
+    type: Number,
+
+    // Required validation
+    required: [true, "A tour must have a price"],
+  },
+});
+
+// Create a Mongoose Model
+//
+// Syntax:
+// mongoose.model('ModelName', schema)
+//
+// This creates a Model class based on the schema.
+//
+// The model allows database operations like:
+// Tour.find()
+// Tour.create()
+// Tour.save()
+// Tour.findById()
+// Tour.updateOne()
+//
+// 'Tour' becomes the collection name 'tours' in MongoDB
+// (Mongoose pluralizes and lowercases model names automatically)
+const Tour = mongoose.model("Tour", tourSchema);
+
+// Set application port
+//
+// Use PORT from environment variables if available,
+// otherwise default to 8001
+const port = process.env.PORT || 8001;
+
+// Start Express server
+app.listen(port, () => {
+  console.log(`App running on port ${port}...`);
+});
+```
+
+---
+
+### 86. Creating Documents and Testing the Model
+
+---
+
+```js
+const testTour = new Tour({
+  name: "The Parl Camper",
+  rating: 4.7,
+  price: 497,
+});
+
+testTour
+  .save()
+  .then((doc) => {
+    console.log(doc);
+  })
+  .catch((err) => {
+    console.log(err);
+  });
+```
+
+---
+
+### 95. Making the API Better: Filtering
+
+```js
+// BUILD QUERY
+// 1) Filtering
+const queryObj = { ...req.query };
+const excludedFields = ["page", "sort", "limit", "fields"];
+excludedFields.forEach((el) => delete queryObj[el]);
+
+// Build a Mongoose query using the remaining URL query parameters as filters
+// Example: ?duration=5&difficulty=easy
+// becomes: Tour.find({ duration: '5', difficulty: 'easy' })
+const query = Tour.find(queryObj);
+
+// EXECUTE QUERY
+const tours = await query;
+
+console.log(req.query);
+// SEND RESPONSE
+res.status(200).json({
+  status: "success",
+  results: tours.length,
+  data: {
+    tours,
+  },
+});
+```
