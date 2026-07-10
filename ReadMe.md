@@ -1623,3 +1623,42 @@ res.status(200).json({
   },
 });
 ```
+
+---
+
+### 96. Sorting
+
+---
+
+```js
+// 2) Sorting
+// http://localhost:8000/api/v1/tours?sort=price,ratingsAverage
+
+if (req.query.sort) {
+  const sortBy = req.query.sort.split(",").join(" ");
+  // console.log(sortBy);
+  query = query.sort(sortBy);
+  // sort("price rattingsAverage")
+} else {
+  query = query.sort("-createdAt");
+}
+```
+
+---
+
+### 99. Limiting fields
+
+---
+
+```js
+// 3) Field limiting
+
+// http://localhost:8000/api/v1/tours?fields=name,duration,difficulty,price
+if (req.query.fields) {
+  const fields = req.query.fields.split(",").join(" ");
+  query = query.select(fields); // include
+} else {
+  // http://localhost:8000/api/v1/tours?fields=-name
+  query = query.select("-__v"); // exclude
+}
+```
