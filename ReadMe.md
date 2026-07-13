@@ -1662,3 +1662,128 @@ if (req.query.fields) {
   query = query.select("-__v"); // exclude
 }
 ```
+
+---
+
+### 101. Refactoring pipelines
+
+---
+
+```js
+class APIFeatures {
+  constructor(query, queryString) {
+    ((this.query = query), (this.queryString = queryString));
+  }
+  filter() {
+    const queryObj = { ...this.queryString };
+    const excludedFields = ["page", "sort", "limit", "fields"];
+    excludedFields.forEach((el) => delete queryObj[el]);
+
+    let queryStr = JSON.stringify(queryObj);
+    queryStr = queryStr.replace(/\b(gte|gt|lte|lt)\b/g, (match) => `$${match}`);
+    this.query = this.query.find(JSON.parse(queryStr));
+
+    return this;
+  }
+
+  sort() {
+    if (this.queryString.sort) {
+      const sortBy = this.queryString.sort.split(",").join(" ");
+      // console.log(sortBy);
+      this.query = this.query.sort(sortBy);
+      // sort("price rattingsAverage")
+    } else {
+      this.query = this.query.sort("-createdAt");
+    }
+    return this;
+  }
+
+  limitFields() {
+    if (this.queryString.fields) {
+      const fields = this.queryString.fields.split(",").join(" ");
+      this.query = this.query.select(fields); // include
+    } else {
+      // http://localhost:8000/api/v1/tours?fields=-name
+      this.query = this.query.select("-__v"); // exclude
+    }
+
+    return this;
+  }
+
+  paginate() {
+    const page = this.queryString.page * 1 || 1;
+    const limit = this.queryString.limit * 1 || 100;
+    const skip = (page - 1) * limit;
+
+    // http://localhost:8000/api/v1/tours?page=2&limit=3
+    this.query = this.query.skip(skip).limit(limit);
+    return this;
+  }
+}
+```
+
+```js
+const getAllTours = async (req, res) => {
+  try {
+    // EXECUTE QUERY
+    const features = new APIFeatures(Tour.find(), req.query)
+      .filter()
+      .sort()
+      .limitFields()
+      .paginate();
+    const tours = await features.query;
+    // SEND RESPONSE
+    res.status(200).json({
+      status: "success",
+      results: tours.length,
+      data: {
+        tours,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({
+      status: "fail",
+      message: err.message,
+    });
+  }
+};
+```
+
+---
+
+### 102. Aggregation pipeline: Matching and grouping
+
+---
+
+```js
+getTourStats = async (req, res) => {
+  try {
+    const stats = await Tour.aggregate([
+      { $match: { ratingsAverage: { $gte: 4.5 } } },
+      {
+        $group: {
+          _id: `$difficulty`,
+          numTours: { $sum: 1 },
+          numRatings: { $sum: `$ratingsAverage` },
+          avgRating: { $avg: `$ratingsAverage` },
+          avgPrice: { $avg: `$price` },
+          minPrice: { $min: `$price` },
+          maxPrice: { $max: `$price` },
+        },
+      },
+      { $sort: { avgPrice: 1 } },
+    ]);
+    res.status(200).json({
+      status: "success",
+      data: {
+        stats,
+      },
+    });
+  } catch (err) {
+    res.status(400).json({
+      status: "fail",
+      message: err.message,
+    });
+  }
+};
+```
