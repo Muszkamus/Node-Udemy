@@ -1759,31 +1759,251 @@ const getAllTours = async (req, res) => {
 getTourStats = async (req, res) => {
   try {
     const stats = await Tour.aggregate([
-      { $match: { ratingsAverage: { $gte: 4.5 } } },
+      { $match: { ratingsAverage: { $gte: 4.5 } } }, // Only include highly rated tours
       {
         $group: {
-          _id: `$difficulty`,
-          numTours: { $sum: 1 },
-          numRatings: { $sum: `$ratingsAverage` },
-          avgRating: { $avg: `$ratingsAverage` },
-          avgPrice: { $avg: `$price` },
-          minPrice: { $min: `$price` },
-          maxPrice: { $max: `$price` },
+          _id: `$difficulty`, // Group tours by difficulty
+          numTours: { $sum: 1 }, // Count tours in each group
+          numRatings: { $sum: `$ratingsAverage` }, // Sum all ratings
+          avgRating: { $avg: `$ratingsAverage` }, // Calculate the average rating
+          avgPrice: { $avg: `$price` }, // Calculate the average price
+          minPrice: { $min: `$price` }, // Find the lowest price
+          maxPrice: { $max: `$price` }, // Find the highest price
         },
       },
-      { $sort: { avgPrice: 1 } },
+      { $sort: { avgPrice: 1 } }, // Sort by average price (lowest first)
     ]);
+
     res.status(200).json({
-      status: "success",
+      status: "success", // Indicate the request succeeded
       data: {
-        stats,
+        stats, // Return the calculated statistics
       },
     });
   } catch (err) {
     res.status(400).json({
-      status: "fail",
-      message: err.message,
+      status: "fail", // Indicate the request failed
+      message: err.message, // Return the error message
     });
   }
+};
+```
+
+---
+
+### 103. Aggregation Pipeline: Unwinding and Projecting
+
+---
+
+```js
+router.route(`/monthly-plan/:year`).get(tourController.getMonthlyPlan);
+```
+
+```js
+getMonthlyPlan = async (req, res) => {
+  try {
+    const year = req.params.year * 1; // Convert the year parameter to a number
+
+    const plan = await Tour.aggregate([
+      {
+        $unwind: `$startDates`, // Split the startDates array into separate documents
+      },
+      {
+        $match: {
+          startDates: {
+            $gte: new Date(`${year}-01-01`), // Keep dates from the start of the year
+            $lte: new Date(`${year}-12-31`), // Keep dates until the end of the year
+          },
+        },
+      },
+      {
+        $group: {
+          _id: { $month: `$startDates` }, // Group by month
+          numToursStarts: { $sum: 1 }, // Count tour starts
+          tours: { $push: `$name` }, // Collect tour names
+        },
+      },
+      { $addFields: { month: `$_id` } }, // Add a month field
+      { $project: { _id: 0 } }, // Remove the _id field
+      { $sort: { numToursStarts: -1 } }, // Sort by number of tour starts
+      { $limit: 12 }, // Return up to 12 months
+    ]);
+
+    res.status(200).json({
+      status: "success", // Indicate a successful request
+      data: {
+        plan, // Return the monthly plan
+      },
+    });
+  } catch (err) {
+    res.status(400).json({
+      status: "fail", // Indicate the request failed
+      message: err.message, // Return the error message
+    });
+  }
+};
+```
+
+---
+
+### 105. Document Middleware
+
+---
+
+```js
+// Document middleware: Runs before save() and create()
+tourSchema.pre("save", function () {
+  this.slug = slugify(this.name, { lower: true }); // Generate a URL-friendly slug from the tour name
+});
+
+tourSchema.pre("save", function () {
+  console.log("Will save document..."); // Log a message before the document is saved
+});
+
+tourSchema.post("save", function (doc) {
+  console.log(doc); // Log the saved document after it has been stored
+});
+```
+
+---
+
+### 106. Query Middleware
+
+---
+
+```js
+// Query middleware: Runs before any query whose name starts with "find"
+// (e.g. find(), findOne(), findById(), findOneAndUpdate(), findOneAndDelete())
+tourSchema.pre(/^find/, function () {
+  this.find({ secretTour: { $ne: true } }); // Exclude secret tours from the query results
+  this.start = Date.now(); // Save the current time to measure query duration
+});
+
+// Query middleware: Runs after any "find" query completes
+tourSchema.post(/^find/, function (docs) {
+  console.log(`Query took ${Date.now() - this.start} milliseconds!`); // Log how long the query took
+  console.log(docs); // Log the documents returned by the query
+});
+```
+
+---
+
+### 107. Aggregation Middleware
+
+---
+
+```js
+// Aggregation Middleware
+
+tourSchema.pre(`aggregate`, function () {
+  this.pipeline().unshift({ $match: { secretTour: { $ne: true } } });
+  console.log(this);
+});
+```
+
+---
+
+# Section 9: Error Handling with Express
+
+---
+
+### 111. Debugging Node.js with ndb
+
+---
+
+```bash
+npm i ndb --global
+```
+
+To run > npm run debug
+
+```json
+  "scripts": {
+
+    "debug": "ndb server.js"
+  },
+```
+
+---
+
+### 112. Handling Unhandled Routes
+
+---
+
+```js
+app.all("/{*splat}", (req, res, next) => {
+  // Just * in newer versions
+  res.status(404).json({
+    status: "fail",
+    message: `Can't find ${req.originalUrl} on this server`,
+  });
+});
+```
+
+---
+
+### 113. An Overview of Error Handling
+
+---
+
+![alt text](image-2.png)
+
+---
+
+### 115. Better Errors and Refactoring
+
+---
+
+```js
+class AppError extends Error {
+  /**
+   * Creates an operational application error.
+   *
+   * @param {string} message - Human-readable error message.
+   * @param {number} statusCode - HTTP status code associated with the error.
+   */
+  constructor(message, statusCode) {
+    // Initialize the built-in Error class and set `this.message`.
+    super(message);
+
+    // Store the HTTP status code so error-handling middleware can use it.
+    this.statusCode = statusCode;
+
+    // Classify 4xx errors as client failures and everything else as server errors.
+    this.status = `${statusCode}`.startsWith("4") ? "fail" : "err";
+
+    // Mark this as an expected, operational error rather than a programming bug.
+    this.isOperational = true;
+
+    // Remove this constructor from the stack trace, making debugging output cleaner.
+    // `captureStackTrace` is primarily available in V8-based runtimes such as Node.js.
+    Error.captureStackTrace(this, this.constructor);
+  }
+}
+
+module.exports = AppError;
+```
+
+```js
+/**
+ * Global Express error-handling middleware.
+ *
+ * Express recognizes this as an error handler because it accepts
+ * four parameters: (err, req, res, next).
+ */
+module.exports = (err, req, res, next) => {
+  // Use the error's status code if it exists; otherwise default to 500
+  // (Internal Server Error).
+  err.statusCode = err.statusCode || 500;
+
+  // Use the error's status if it exists; otherwise assume it's
+  // an unexpected server error.
+  err.status = err.status || "error";
+
+  // Send a JSON response containing the status and error message.
+  res.status(err.statusCode).json({
+    status: err.status,
+    message: err.message,
+  });
 };
 ```

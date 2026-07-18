@@ -1,10 +1,13 @@
 const express = require('express');
 
 const morgan = require('morgan');
+const AppError = require('./utils/appError');
 
 const tourRouter = require('./routes/tourRoutes');
 const userRouter = require('./routes/userRoutes');
 const app = express();
+
+const globalErrorHandler = require('./controllers/errorController');
 app.use(express.static(`${__dirname}/public`));
 
 // 1) MIDDLEWARES
@@ -26,5 +29,12 @@ app.use((req, res, next) => {
 
 app.use('/api/v1/tours', tourRouter);
 app.use('/api/v1/users', userRouter);
+
+app.all('/{*splat}', (req, res, next) => {
+  // Just * in newer versions
+
+  next(new AppError(`Can't find ${req.originalUrl} on this server!`));
+});
+app.use(globalErrorHandler);
 
 module.exports = app;
