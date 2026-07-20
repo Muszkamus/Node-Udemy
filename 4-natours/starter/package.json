@@ -8,7 +8,7 @@
   "main": "app.js",
   "scripts": {
     "dev": "nodemon server.js",
-    "start:prod": "NODE_ENV=production nodemon server.js",
+    "start:prod": "cross-env NODE_ENV=production nodemon server.js",
     "debug": "ndb server.js"
   },
   "dependencies": {
@@ -20,5 +20,8 @@
     "ndb": "^1.1.5",
     "slugify": "^1.6.9",
     "validator": "^13.15.35"
+  },
+  "devDependencies": {
+    "cross-env": "^10.1.0"
   }
 }
