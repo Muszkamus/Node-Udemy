@@ -2007,3 +2007,248 @@ module.exports = (err, req, res, next) => {
   });
 };
 ```
+
+---
+
+# Section 10: Authentication, Authorization and Security
+
+---
+
+### 127. Managing Passwords
+
+---
+
+```js
+const mongoose = require("mongoose");
+const validator = require("validator");
+const bcrypt = require("bcryptjs");
+
+/*
+|--------------------------------------------------------------------------
+| USER SCHEMA
+|--------------------------------------------------------------------------
+| Defines the structure and validation rules for user documents.
+|
+| Fields:
+| - name
+| - email
+| - photo
+| - password
+| - passwordConfirm (used only during signup validation)
+|
+*/
+const userSchema = new mongoose.Schema({
+  // User's full name (required)
+  name: {
+    type: String,
+    required: [true, "Please tell us your name"],
+  },
+
+  /*
+  | User's email address.
+  | - Must be unique.
+  | - Automatically converted to lowercase.
+  | - Validated using validator.isEmail().
+  */
+  email: {
+    type: String,
+    required: [true, "Please provide your email"],
+    unique: true,
+    lowercase: true,
+    validate: [validator.isEmail, "Please provide a valid email"],
+  },
+
+  // Stores the profile photo filename or URL.
+  photo: String,
+
+  /*
+  | User password.
+  | - Minimum 8 characters.
+  | - Stored as a hashed value before saving.
+  */
+  password: {
+    type: String,
+    required: [true, "Please provide a password"],
+    minlength: 8,
+  },
+
+  /*
+  | Confirms the password during signup.
+  | Must match the password field.
+  | This field is removed before saving to the database.
+  | Works only with create() and save().
+  */
+  passwordConfirm: {
+    type: String,
+    required: [true, "Please confirm your password"],
+    validate: {
+      validator: function (el) {
+        return el === this.password;
+      },
+      message: "Passwords are not the same",
+    },
+  },
+});
+
+/*
+|--------------------------------------------------------------------------
+| PRE-SAVE MIDDLEWARE
+|--------------------------------------------------------------------------
+| Runs before a document is saved.
+|
+| - Hashes the password using bcrypt.
+| - Removes passwordConfirm since it isn't needed in the database.
+| - Skips hashing if the password wasn't modified.
+|
+*/
+userSchema.pre("save", async function () {
+  if (!this.isModified("password")) return;
+
+  this.password = await bcrypt.hash(this.password, 12);
+  this.passwordConfirm = undefined;
+});
+
+// Create the User model (maps to the "users" collection in MongoDB).
+const User = mongoose.model("User", userSchema);
+
+// Export the model for use in other files.
+module.exports = User;
+```
+
+---
+
+### 128. How Authentication with JWT Works
+
+---
+
+![alt text](image-3.png)
+
+# How JSON Web Token (JWT) Authentication Works
+
+## Login Flow
+
+### 1. Client → Server
+
+**Request**
+
+```http
+POST /login
+```
+
+**Body**
+
+```json
+{
+  "email": "user@example.com",
+  "password": "your-password"
+}
+```
+
+Sent over **HTTPS**.
+
+---
+
+### 2. Server
+
+- Verify the user's email and password.
+- If the credentials are valid:
+  - Create a unique JWT.
+  - Sign it using a **secret key**.
+
+```
+JWT + SECRET → Signed Token
+```
+
+---
+
+### 3. Server → Client
+
+Return the generated JWT.
+
+```
+JWT
+```
+
+---
+
+### 4. Client
+
+Store the JWT for future requests.
+
+Common storage options:
+
+- HTTP-only Cookie (recommended)
+- Local Storage
+
+---
+
+## Accessing Protected Resources
+
+### 5. Client → Server
+
+Request a protected route while sending the JWT.
+
+```http
+GET /someProtectedRoute
+```
+
+Example header:
+
+```http
+Authorization: Bearer <JWT>
+```
+
+Sent over **HTTPS**.
+
+---
+
+### 6. Server
+
+Validate the JWT.
+
+- If the token is valid:
+  - Allow access.
+- Otherwise:
+  - Return **401 Unauthorized**.
+
+---
+
+### 7. Server → Client
+
+Return the requested protected data.
+
+```
+Protected Data
+```
+
+---
+
+## Overall Flow
+
+```text
+Client
+  │
+  ├── POST /login (email, password)
+  ▼
+Server
+  │
+  ├── Verify credentials
+  ├── Create JWT
+  ▼
+Client
+  │
+  ├── Store JWT
+  │
+  ├── GET /someProtectedRoute
+  ├── Authorization: Bearer <JWT>
+  ▼
+Server
+  │
+  ├── Verify JWT
+  │
+  ├── Valid? ── Yes ──► Return Protected Data
+  │
+  └── No ──► 401 Unauthorized
+```
+
+---
