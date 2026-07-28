@@ -2252,3 +2252,280 @@ Server
 ```
 
 ---
+
+### 141. Security Best Practices
+
+---
+
+- 🔐 Password Hashing (`bcrypt`)
+
+**Purpose:** Passwords should never be stored in plain text because anyone who gains access to your database could immediately log into users' accounts. bcrypt securely hashes passwords with a unique salt, making them extremely difficult to reverse using brute-force or rainbow table attacks.
+
+- Never store plain text passwords.
+- `bcrypt` hashes passwords and automatically adds a unique salt.
+- The salt prevents identical passwords from having identical hashes.
+- `bcrypt.compare()` verifies passwords without decrypting them.
+
+```js
+user.password = await bcrypt.hash(user.password, 12);
+```
+
+---
+
+- 🔑 Password Reset Tokens
+
+**Purpose:** Password reset links allow users to regain access to their accounts, so they are valuable targets for attackers. Storing only a hashed version of the reset token means that even if your database is compromised, attackers cannot use those tokens to reset passwords.
+
+- Generate a long random token.
+- Send the plain token to the user's email.
+- Store only the SHA-256 hash in the database.
+
+```js
+const resetToken = crypto.randomBytes(32).toString("hex");
+
+const hashedToken = crypto
+  .createHash("sha256")
+  .update(resetToken)
+  .digest("hex");
+```
+
+---
+
+- 🚫 Rate Limiting
+
+**Purpose:** Rate limiting restricts how many requests a client can make within a given period, reducing the effectiveness of brute-force and denial-of-service attacks. It also protects your server from excessive traffic and resource exhaustion.
+
+```js
+const rateLimit = require("express-rate-limit");
+
+app.use(
+  rateLimit({
+    max: 100,
+    windowMs: 60 * 60 * 1000,
+  }),
+);
+```
+
+---
+
+- 🔢 Maximum Login Attempts
+
+**Purpose:** Limiting consecutive failed login attempts prevents attackers from repeatedly guessing passwords. Temporarily locking an account or delaying further attempts makes automated password attacks much less practical.
+
+Example policy:
+
+- 5 failed logins
+- Lock account for 15 minutes
+- Reset counter after successful login
+
+---
+
+- 🍪 HTTPOnly Cookies
+
+**Purpose:** JWTs stored in localStorage can be stolen by malicious JavaScript during an XSS attack. HTTPOnly cookies cannot be accessed by JavaScript, making them a much safer place to store authentication tokens.
+
+```js
+res.cookie("jwt", token, {
+  httpOnly: true,
+});
+```
+
+---
+
+- 🧹 Input Sanitisation
+
+**Purpose:** User input should never be trusted because attackers can submit malicious data instead of normal values. Sanitising input removes dangerous content that could lead to NoSQL injection, XSS, or other injection-based attacks.
+
+Recommended packages:
+
+- `express-mongo-sanitize`
+- `xss-clean`
+
+---
+
+- 🛡️ Helmet
+
+**Purpose:** Helmet automatically sets a collection of security-related HTTP headers that protect against common web vulnerabilities. It provides a strong baseline of browser security with very little configuration.
+
+```js
+const helmet = require("helmet");
+app.use(helmet());
+```
+
+---
+
+- 📦 Body Size Limits
+
+**Purpose:** Attackers can send extremely large request bodies to consume your server's memory and processing power. Limiting the maximum payload size helps prevent these denial-of-service attacks.
+
+```js
+app.use(
+  express.json({
+    limit: "10kb",
+  }),
+);
+```
+
+---
+
+- 🌐 HTTPS
+
+HTTPS encrypts all communication between the client and server so that sensitive information cannot be read or modified during transmission. Without HTTPS, passwords, tokens, and personal data could be intercepted over public networks.
+
+---
+
+- 🎲 Random Password Reset Tokens
+
+Password reset tokens should be generated using cryptographically secure random values so they cannot be predicted. Predictable tokens make it possible for attackers to guess valid reset links.
+
+```js
+crypto.randomBytes(32);
+```
+
+---
+
+- ⏰ Token Expiry
+
+Security tokens should only remain valid for a short period to minimise the impact if they are stolen. Short expiry times significantly reduce the attack window available to an attacker.
+
+---
+
+- 🔄 Invalidate JWT After Password Change
+
+If a user changes their password, any previously issued JWTs should immediately become invalid. This ensures that someone using a stolen token loses access as soon as the password is updated.
+
+Store a `passwordChangedAt` timestamp and reject JWTs issued before that
+time.
+
+---
+
+- 🙈 Hide Error Details
+
+Detailed error messages often reveal information about your application's structure, database, or code. Returning generic errors to users while logging the real error internally prevents attackers from gathering useful information.
+
+Return generic errors to clients.
+
+Example:
+
+```text
+Invalid email or password.
+```
+
+Log detailed errors only on the server.
+
+---
+
+- 🛡️ CSRF Protection
+
+Browsers automatically send cookies with requests, allowing attackers to trick authenticated users into performing unwanted actions. CSRF protection verifies that requests genuinely originated from your own application.
+
+---
+
+- 🔐 Re-authentication
+
+**Purpose:** Sensitive actions such as changing a password or deleting an account should require users to confirm their identity again. This reduces the risk of account misuse if someone gains temporary access to an authenticated session.
+
+Require users to enter their password again before:
+
+- Changing password
+- Changing email
+- Deleting account
+
+---
+
+- 🚫 JWT Blacklist
+
+JWTs are normally valid until they expire, even after a user logs out. A blacklist allows the server to revoke compromised or logged-out tokens immediately instead of waiting for them to expire.
+
+---
+
+- ✅ Email Verification
+
+**Purpose:** Verifying email ownership ensures users register with a real, accessible email address. It prevents fake accounts and allows important account recovery and security notifications to reach the correct user.
+
+Registration flow:
+
+```text
+Register
+↓
+Verification Email
+↓
+User Clicks Link
+↓
+Account Activated
+```
+
+---
+
+- 🔄 Refresh Tokens
+
+**Purpose:** Keeping access tokens short-lived limits the damage if they are stolen, but users should not need to log in every few minutes. Refresh tokens allow the application to securely issue new access tokens while maintaining a smooth user experience.
+
+- Access Token: \~15 minutes
+- Refresh Token: \~30 days
+
+Use refresh tokens to issue new access tokens without forcing the user
+to log in again.
+
+---
+
+- 📱 Two-Factor Authentication (2FA)
+
+**Purpose:** Passwords alone may be stolen through phishing, data breaches, or malware. Two-factor authentication requires a second proof of identity, making unauthorised access far more difficult.
+
+Login flow:
+
+```text
+Email
+↓
+Password
+↓
+Authenticator Code
+↓
+Login
+```
+
+---
+
+- ⚠️ Parameter Pollution Protection
+
+Attackers can send duplicate query parameters to manipulate how your application processes requests. Parameter pollution protection ensures only expected values are accepted, preventing unexpected behaviour and potential security issues.
+
+Example:
+
+```text
+/users?role=user&role=admin
+```
+
+Use the `hpp` package.
+
+---
+
+- Recommended Order
+
+- Essential
+
+- bcrypt password hashing
+- HTTPS
+- Helmet
+- Rate limiting
+- Input sanitisation
+- HTTPOnly cookies
+- Password reset tokens with expiry
+- Hide detailed errors
+- JWT invalidation after password changes
+
+- Strongly Recommended
+
+- Email verification
+- Refresh tokens
+- Maximum login attempts
+- Body size limits
+- Parameter pollution protection
+
+- Advanced
+
+- CSRF protection
+- JWT blacklist
+- Two-factor authentication
+- Re-authentication for sensitive actions
