@@ -3,8 +3,6 @@ const mongoose = require('mongoose');
 const validator = require('validator');
 const bcrypt = require('bcryptjs');
 
-// name, email. photo, password, passwordCondifm
-
 const userSchema = new mongoose.Schema({
   name: {
     type: String,
@@ -51,20 +49,24 @@ const userSchema = new mongoose.Schema({
 });
 
 userSchema.pre('save', async function () {
-  if (!this.isModified('password')) return;
+  // Only run this function if password was actually modified
+  if (!this.isModified('password')) return n;
+
+  // Hash the password with cost of 12
   this.password = await bcrypt.hash(this.password, 12);
+
+  // Delete passwordConfirm field
   this.passwordConfirm = undefined;
 });
 
 userSchema.pre('save', function () {
-  if (!this.isModified('password') || this.isNew) return;
+  if (!this.isModified('password') || this.isNew) return next();
 
   this.passwordChangedAt = Date.now() - 1000;
 });
 
 userSchema.pre(/^find/, function () {
-  // this point to the current query
-
+  // this points to the current query
   this.find({ active: { $ne: false } });
 });
 
@@ -75,14 +77,18 @@ userSchema.methods.correctPassword = async function (
   return await bcrypt.compare(candidatePassword, userPassword);
 };
 
-userSchema.methods.changedPasswordAfter = function (jwtTimestamp) {
-  if (!this.passwordChangedAt) {
-    return false;
+userSchema.methods.changedPasswordAfter = function (JWTTimestamp) {
+  if (this.passwordChangedAt) {
+    const changedTimestamp = parseInt(
+      this.passwordChangedAt.getTime() / 1000,
+      10,
+    );
+
+    return JWTTimestamp < changedTimestamp;
   }
 
-  const changedTimestamp = Math.floor(this.passwordChangedAt.getTime() / 1000);
-
-  return changedTimestamp > jwtTimestamp;
+  // False means NOT changed
+  return false;
 };
 
 userSchema.methods.createPasswordResetToken = function () {
@@ -93,7 +99,10 @@ userSchema.methods.createPasswordResetToken = function () {
     .update(resetToken)
     .digest('hex');
 
-  this.passwordResetExpires = Date.now() + 10 * 60 * 1000; // Ten minutes
+  console.log({ resetToken }, this.passwordResetToken);
+
+  this.passwordResetExpires = Date.now() + 10 * 60 * 1000;
+
   return resetToken;
 };
 
